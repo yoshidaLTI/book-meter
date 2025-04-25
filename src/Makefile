@@ -27,5 +27,3 @@ $(OBJECTDIR):
 
 clean:
 	        rm -rf $(OBJECTDIR) $(TARGETDIR)
-			Makefile (END)
-
