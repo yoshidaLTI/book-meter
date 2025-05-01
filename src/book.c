@@ -2,7 +2,19 @@
 #include <string.h>
 #include <time.h>
 #include <sqlite3.h>
+#include <stdlib.h>
 
+
+typedef struct{
+    char *title;
+    char **authors;
+    int nunber_of_author;
+    int page;
+    char publish_date;
+    int progress;
+}book_t;
+
+//1
 void print_help() {
     printf("使用可能なコマンド:\n");
     printf("  add   - 本を追加\n");
@@ -12,33 +24,91 @@ void print_help() {
     printf("  exit  - プログラムを終了\n");
 }
 
+//2
 void add_book(sqlite3 *db) {
-    char title[256], author[256], publish_date[64];
-    int pages;
-
-    printf("本のタイトルを入力してください：");
+    book_t book;
+    char *tmp =(char*)malloc(1024);
+    int flag = 1;
+    book.title = (char*)malloc(1024);
+    if(book.title==NULL){
+        fprintf(stderr,"メモリ確保失敗");
+        exit(EXIT_FAILURE);
+    }    
+    book.author = (char**)malloc(sizeof(char*)*5);
+    if(book.author == NULL){
+        fprintf(stderr,"メモリ確保失敗");
+        exit(EXIT_FAILURE); 
+    }
+    
+    book.number_of_author = 0;
+    
+    char *name =(char*)malloc(100);    
+    if(name == NULL){
+        fprintf(stderr,"メモリ確保失敗");
+        exit(EXIT_FAILURE); 
+    }
+    
+    
+    printf("本のタイトルを入力してください：(終了時はquit)");
     getchar(); // 改行を消す
-    fgets(title, sizeof(title), stdin);
-    title[strcspn(title, "\n")] = '\0';
-
-    printf("作者名を入力してください：");
-    fgets(author, sizeof(author), stdin);
-    author[strcspn(author, "\n")] = '\0';
-
+    fgets(tmp, sizeof(1024), stdin);
+    if(strcmp(tmp,"quit")==0){
+        flag = 0;
+        free(tmp);
+        free(book.title);
+        free(book.author);
+        free(name);
+        return;
+    }
+    book.title = tmp;
+        
+    book.title[strcspn(book.title, "\n")] = '\0';
+    
+    
+    while(1){   
+        printf("作者名を入力してください：");
+        fgets(tmp, sizeof(100), stdin);
+        if(strcmp(tmp,"quit")==0){
+            flag = 0;
+            free(tmp);
+            free(book.title);
+            free(book.author);
+            free(name);
+            return;
+        }  
+        if(strcmp(tmp,"\n")==0){
+            break;
+        }  
+        name = tmp;
+        name[strcspn(name, "\n")] = '\0';
+    }
+    
     printf("ページ数を入力してください：");
-    scanf("%d", &pages);
+    fgets(tmp,sizeof(100),stdin);
+    if(strcmp(tmp,"quit")==0){
+        flag = 0;
+        free(tmp);
+        free(book.title);
+        free(book.author);
+        free(name);
+        return;
+    }
     getchar(); // 改行を消す
+    
+    book.page = 
     
     printf("発行日を入力してください（例：2025-04-23）：");
     fgets(publish_date, sizeof(publish_date), stdin);
     publish_date[strcspn(publish_date, "\n")] = '\0';
+    
 
 
-
+    
     const char *sql = "INSERT INTO books (title, author, pages, publish_date, progress) VALUES (?, ?, ?, ?, 0);";
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     sqlite3_bind_text(stmt, 1, title, -1, SQLITE_STATIC);
+    //addbook_db
     sqlite3_bind_text(stmt, 2, author, -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 3, pages);
     sqlite3_bind_text(stmt, 4, publish_date, -1, SQLITE_STATIC);
@@ -71,6 +141,7 @@ void list_books(sqlite3 *db) {
     sqlite3_finalize(stmt);
 }
 
+//3
 void update_progress(sqlite3 *db) {
     int id, read_today, current_progress, total_pages;
     sqlite3_stmt *stmt;
@@ -130,14 +201,13 @@ void update_progress(sqlite3 *db) {
         sqlite3_finalize(stmt);
     }
 }
-
-int main() {
-    char command[256];
+//4
+sqlite3* initialize_sqlite3(){
     sqlite3 *db;
 
     if (sqlite3_open("books.db", &db) != SQLITE_OK) {
-        printf("データベースを開けません：%s\n", sqlite3_errmsg(db));
-        return 1;
+        fprintf(stderr,"データベースを開けません：%s\n", sqlite3_errmsg(db));
+        exit(1);
     }
 
     const char *create_books_sql =
@@ -160,11 +230,19 @@ int main() {
     char *err_msg = NULL;
     if (sqlite3_exec(db, create_books_sql, 0, 0, &err_msg) != SQLITE_OK ||
         sqlite3_exec(db, create_log_sql, 0, 0, &err_msg) != SQLITE_OK) {
-        printf("テーブル作成エラー：%s\n", err_msg);
+        fprintf(stderr,"テーブル作成エラー：%s\n", err_msg);
         sqlite3_free(err_msg);
         sqlite3_close(db);
-        return 1;
+        exit(1);
     }
+    return db;
+
+}
+
+
+int main() {
+    char command[256];
+    sqlite3 *db = initialize_sqlite3();
 
     printf("コマンドを入力してください（[Ctrl]+C または exit で終了）：\n");
     print_help();
