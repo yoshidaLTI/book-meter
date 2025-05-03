@@ -3,16 +3,20 @@
 #include <time.h>
 #include <sqlite3.h>
 #include <stdlib.h>
-
+#include <stdbool.h>
 
 typedef struct{
     char *title;
     char **authors;
-    int nunber_of_author;
+    int number_of_author;
     int page;
-    char publish_date;
+    char *publish_date;
     int progress;
 }book_t;
+
+enum input_mode{
+    TITLE, AUTHOR, PAGE, PUBLISH_DATE
+};
 
 //1
 void print_help() {
@@ -24,101 +28,99 @@ void print_help() {
     printf("  exit  - プログラムを終了\n");
 }
 
-//2
-void add_book(sqlite3 *db) {
+void add_book(sqlite3 *db){
+
+    enum input_mode mode;
+    mode = TITLE;
     book_t book;
-    char *tmp =(char*)malloc(1024);
-    int flag = 1;
-    book.title = (char*)malloc(1024);
-    if(book.title==NULL){
-        fprintf(stderr,"メモリ確保失敗");
-        exit(EXIT_FAILURE);
-    }    
-    book.author = (char**)malloc(sizeof(char*)*5);
-    if(book.author == NULL){
-        fprintf(stderr,"メモリ確保失敗");
-        exit(EXIT_FAILURE); 
-    }
-    
+
+    book.authors = (char**)malloc(sizeof(char *) * 10);
     book.number_of_author = 0;
+
+    bool exit_data = false;
+    bool is_first = true;
+
+    while(!exit_data){
+
+        // prompt 
+        switch(mode){
+            case TITLE:
+                printf("本のタイトルを入力してください：(終了時はquit)");
+                break;
+            case AUTHOR:
+                printf("作者名を入力してください：(終了時はquit)");
+                break;
+            case PAGE:
+                printf("ページ数を入力してください：(終了時はquit)");
+                break;
+            case PUBLISH_DATE:
+                printf("発行日を入力してください（例：2025-04-23）：");
+                break;
+        }
     
-    char *name =(char*)malloc(100);    
-    if(name == NULL){
-        fprintf(stderr,"メモリ確保失敗");
-        exit(EXIT_FAILURE); 
-    }
-    
-    
-    printf("本のタイトルを入力してください：(終了時はquit)");
-    getchar(); // 改行を消す
-    fgets(tmp, sizeof(1024), stdin);
-    if(strcmp(tmp,"quit")==0){
-        flag = 0;
-        free(tmp);
-        free(book.title);
-        free(book.author);
-        free(name);
-        return;
-    }
-    book.title = tmp;
-        
-    book.title[strcspn(book.title, "\n")] = '\0';
-    
-    
-    while(1){   
-        printf("作者名を入力してください：");
-        fgets(tmp, sizeof(100), stdin);
-        if(strcmp(tmp,"quit")==0){
-            flag = 0;
-            free(tmp);
-            free(book.title);
-            free(book.author);
-            free(name);
+        // get user's input 
+        char *line = (char *)malloc(sizeof(char)*1024);
+
+        if(is_first){
+            int c;
+            while((c = getchar()) !='\n'){}    
+            is_first = false;
+        }
+
+        if(fgets(line, 1024, stdin) != NULL){
+            line[strcspn(line, "\n")] = '\0';
+        }
+
+        // quit
+        if(strcmp(line, "quit")==0)
             return;
-        }  
-        if(strcmp(tmp,"\n")==0){
-            break;
-        }  
-        name = tmp;
-        name[strcspn(name, "\n")] = '\0';
-    }
-    
-    printf("ページ数を入力してください：");
-    fgets(tmp,sizeof(100),stdin);
-    if(strcmp(tmp,"quit")==0){
-        flag = 0;
-        free(tmp);
-        free(book.title);
-        free(book.author);
-        free(name);
-        return;
-    }
-    getchar(); // 改行を消す
-    
-    book.page = 
-    
-    printf("発行日を入力してください（例：2025-04-23）：");
-    fgets(publish_date, sizeof(publish_date), stdin);
-    publish_date[strcspn(publish_date, "\n")] = '\0';
-    
 
+        // store 
+        switch(mode){
+            case TITLE:
+                book.title = (char *)malloc(sizeof(char)* 1024);
+                if(book.title == NULL){
+                    fprintf(stderr, "malloc error!\n");
+                    exit(EXIT_FAILURE);
+                }
+                strcpy(book.title, line);
+                mode = AUTHOR;
+                break;
+            case AUTHOR:
+                if(strlen(line) < 1){
+                    mode = PAGE;
+                    break;
+                }
+                // add author 
+                book.authors[book.number_of_author] = (char *)malloc(sizeof(char)*1024);
+                if(book.authors[book.number_of_author] == NULL){
+                    fprintf(stderr, "malloc error!\n");
+                    exit(EXIT_FAILURE);
+                }
+                strcpy(book.authors[book.number_of_author], line);
+                book.number_of_author++;
+                break;
+            case PAGE:
+                book.page = atoi(line);
+                mode = PUBLISH_DATE;                
+                break;
+            case PUBLISH_DATE:
+                book.publish_date = (char *)malloc(sizeof(char)* 1024);
+                if(book.publish_date == NULL){
+                    fprintf(stderr, "malloc error!\n");
+                    exit(EXIT_FAILURE);
+                }
+                strcpy(book.publish_date, line);
+                exit_data = true;
+                break;
+        }
 
-    
-    const char *sql = "INSERT INTO books (title, author, pages, publish_date, progress) VALUES (?, ?, ?, ?, 0);";
-    sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    sqlite3_bind_text(stmt, 1, title, -1, SQLITE_STATIC);
-    //addbook_db
-    sqlite3_bind_text(stmt, 2, author, -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 3, pages);
-    sqlite3_bind_text(stmt, 4, publish_date, -1, SQLITE_STATIC);
-
-    if (sqlite3_step(stmt) == SQLITE_DONE) {
-        printf("本を登録しました。\n");
-    } else {
-        printf("登録に失敗しました：%s\n", sqlite3_errmsg(db));
+        free(line);
     }
-    sqlite3_finalize(stmt);
+
+    if(exit_data){
+        // TODO: データベースに保存する処理を書く
+    }
 }
 
 void list_books(sqlite3 *db) {
@@ -141,7 +143,6 @@ void list_books(sqlite3 *db) {
     sqlite3_finalize(stmt);
 }
 
-//3
 void update_progress(sqlite3 *db) {
     int id, read_today, current_progress, total_pages;
     sqlite3_stmt *stmt;
@@ -171,13 +172,11 @@ void update_progress(sqlite3 *db) {
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
 
-        // 日付取得
         time_t t = time(NULL);
         struct tm tm = *localtime(&t);
         char date[32];
         snprintf(date, sizeof(date), "%04d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
 
-        // 進捗履歴に記録
         const char *insert_log = "INSERT INTO progress_log (book_id, date, pages) VALUES (?, ?, ?);";
         sqlite3_prepare_v2(db, insert_log, -1, &stmt, NULL);
         sqlite3_bind_int(stmt, 1, id);
@@ -201,7 +200,7 @@ void update_progress(sqlite3 *db) {
         sqlite3_finalize(stmt);
     }
 }
-//4
+
 sqlite3* initialize_sqlite3(){
     sqlite3 *db;
 
@@ -239,7 +238,6 @@ sqlite3* initialize_sqlite3(){
 
 }
 
-
 int main() {
     char command[256];
     sqlite3 *db = initialize_sqlite3();
@@ -253,7 +251,6 @@ int main() {
             printf("入力エラーです。\n");
             continue;
         }
-
         if (strcmp(command, "add") == 0) {
             add_book(db);
         } else if (strcmp(command, "list") == 0) {
@@ -273,4 +270,3 @@ int main() {
     sqlite3_close(db);
     return 0;
 }
-
