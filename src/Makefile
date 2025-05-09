@@ -8,7 +8,7 @@ TARGETDIR = ../bin/
 OBJECTDIR = ../obj/
 
 TARGET = $(addprefix $(TARGETDIR), book_meter)
-SOURCES = book.c
+SOURCES = book.c db_manager.c
 OBJECTS = $(addprefix $(OBJECTDIR), $(SOURCES:.c=.o))
 
 all: $(TARGETDIR) $(OBJECTDIR) $(TARGET)
