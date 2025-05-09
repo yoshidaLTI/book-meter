@@ -1,6 +1,6 @@
 #compiler options
 CC = gcc
-CFLAGS = -Wall 
+CFLAGS = -Wall -g
 LDFLAGS = -lsqlite3
 
 #path

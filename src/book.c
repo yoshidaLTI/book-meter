@@ -28,6 +28,36 @@ void print_help() {
     printf("  exit  - プログラムを終了\n");
 }
 
+void register_book_to_db(book_t book, sqlite3 *db){
+    const char *sql = "INSERT INTO books (title, author, pages, publish_date, progress) VALUES (?, ?, ?, ?, 0);";
+    sqlite3_stmt *stmt;
+
+    char *author_str = (char*)malloc(sizeof(char)*256);
+    author_str[0] = '\0';
+    if(author_str == NULL){
+        fprintf(stderr,"malloc err");
+    }
+    for(int i=0;i < book.number_of_author; i++){
+        author_str = strcat(author_str, book.authors[i]);
+        if(i != book.number_of_author-1){
+            author_str = strcat(author_str,", ");
+        }
+    }
+    sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    sqlite3_bind_text(stmt, 1, book.title, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, author_str, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 3, book.page);
+    sqlite3_bind_text(stmt, 4, book.publish_date, -1, SQLITE_STATIC);
+
+    if (sqlite3_step(stmt) == SQLITE_DONE) {
+        printf("本を登録しました。\n");
+    } else {
+        printf("登録に失敗しました：%s\n", sqlite3_errmsg(db));
+    }
+    sqlite3_finalize(stmt);
+    free(author_str);
+}
+
 void add_book(sqlite3 *db){
 
     enum input_mode mode;
@@ -120,6 +150,7 @@ void add_book(sqlite3 *db){
 
     if(exit_data){
         // TODO: データベースに保存する処理を書く
+        register_book_to_db(book, db);
     }
 }
 
@@ -131,8 +162,11 @@ void list_books(sqlite3 *db) {
     printf("登録された本の一覧：\n");
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         int id = sqlite3_column_int(stmt, 0);
+        printf("id %d\n", id);
         const unsigned char *title = sqlite3_column_text(stmt, 1);
+        printf("title %s\n", title);
         const unsigned char *author = sqlite3_column_text(stmt, 2);
+        printf("author %s\n", author);
         int pages = sqlite3_column_int(stmt, 3);
         const unsigned char *publish_date = sqlite3_column_text(stmt, 4);
         int progress = sqlite3_column_int(stmt, 5);
