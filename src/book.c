@@ -20,8 +20,6 @@ void print_help() {
     printf("  exit  - プログラムを終了\n");
 }
 
-
-
 void add_book(sqlite3 *db){
 
     enum input_mode mode;
