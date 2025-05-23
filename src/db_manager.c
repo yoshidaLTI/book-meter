@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "db_manager.h"
+
 sqlite3* initialize_sqlite3(){
     sqlite3 *db;
     if (sqlite3_open("books.db", &db) != SQLITE_OK) {
@@ -68,68 +69,69 @@ void register_book_to_db(book_t book, sqlite3 *db){
     sqlite3_finalize(stmt);
     free(author_str);
 }
+
 void set_node(int start, int end ,node_t *head){
 
 }
 
-void update_progress_to_db(sqlite3 *db, int id){
-    char *read_today =(char *)malloc(sizeof(char)*4096);
-    int current_progress, total_pages;
-    sqlite3_stmt *stmt;
-    const char *select_sql = "SELECT pages, progress FROM books WHERE id = ?;";
-    if (sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL) != SQLITE_OK) {
-        fprintf(stderr, "SQL準備失敗: %s\n", sqlite3_errmsg(db));
-        return;
-    }
-    sqlite3_bind_int(stmt, 1, id); // id をバインド
+/*void update_progress_to_db(sqlite3 *db, int id){*/
+    /*char *read_today =(char *)malloc(sizeof(char)*4096);*/
+    /*int current_progress, total_pages;*/
+    /*sqlite3_stmt *stmt;*/
+    /*const char *select_sql = "SELECT pages, progress FROM books WHERE id = ?;";*/
+    /*if (sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL) != SQLITE_OK) {*/
+        /*fprintf(stderr, "SQL準備失敗: %s\n", sqlite3_errmsg(db));*/
+        /*return;*/
+    /*}*/
+    /*sqlite3_bind_int(stmt, 1, id); // id をバインド*/
 
-    node_t *head;
-    //本が全部で何ページか取得  すでに読まれている区間を取得
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        total_pages = sqlite3_column_int(stmt, 0);
+    /*node_t *head;*/
+    /*//本が全部で何ページか取得  すでに読まれている区間を取得*/
+    /*if (sqlite3_step(stmt) == SQLITE_ROW) {*/
+        /*total_pages = sqlite3_column_int(stmt, 0);*/
 
-        current_progress = sqlite3_column_int(stmt, 1);
-        sqlite3_finalize(stmt);
+        /*current_progress = sqlite3_column_int(stmt, 1);*/
+        /*sqlite3_finalize(stmt);*/
 
 
 
-        printf("今日読んだページを入力\n：例）1ページと50ページのみ読んだ場合 1,50\n");
-        printf("例）1ページから50ページの区間を読んだ場合 1-100\n");
-        if(fgets(read_today, 4096, stdin) == NULL){
-            return ;
-        }
-        int index = 0;
-        int next = 0;
-        int start = 0;
-        int end = 0;
-        while(index < 4096 && read_today[index] != '\0'){
-            next = index;
-            while(next <4096 && read_today[next] != '\0'){
-                if(read_today[next]==',' || read_today[next] == '\0'){
-                    read_today[next]='\0';
-                    end = atoi(read_today[index]);
-                    break;
-                }
-                if(read_today[next]=='-'){
-                    read_today[next]='\0';
-                    start = atoi(read_today[index]);
-                    break;
-                }
-                next++;
-            }
-            if(start == 0){
-                start = end;
-            }
-            if(end != 0){
-                printf("start:%d,\n end:%d\n",start,end);
-                set_node(start, end, head);
-                start = 0;
-                end = 0;                
-            }
-            index = next+1;
+        /*printf("今日読んだページを入力\n：例）1ページと50ページのみ読んだ場合 1,50\n");*/
+        /*printf("例）1ページから50ページの区間を読んだ場合 1-100\n");*/
+        /*if(fgets(read_today, 4096, stdin) == NULL){*/
+            /*return ;*/
+        /*}*/
+        /*int index = 0;*/
+        /*int next = 0;*/
+        /*int start = 0;*/
+        /*int end = 0;*/
+        /*while(index < 4096 && read_today[index] != '\0'){*/
+            /*next = index;*/
+            /*while(next <4096 && read_today[next] != '\0'){*/
+                /*if(read_today[next]==',' || read_today[next] == '\0'){*/
+                    /*read_today[next]='\0';*/
+                    /*end = atoi(read_today[index]);*/
+                    /*break;*/
+                /*}*/
+                /*if(read_today[next]=='-'){*/
+                    /*read_today[next]='\0';*/
+                    /*start = atoi(read_today[index]);*/
+                    /*break;*/
+                /*}*/
+                /*next++;*/
+            /*}*/
+            /*if(start == 0){*/
+                /*start = end;*/
+            /*}*/
+            /*if(end != 0){*/
+                /*printf("start:%d,\n end:%d\n",start,end);*/
+                /*set_node(start, end, head);*/
+                /*start = 0;*/
+                /*end = 0;                */
+            /*}*/
+            /*index = next+1;*/
             
-        }
-    }
+        /*}*/
+    /*}*/
 /*
         int new_progress = current_progress + read_today;
         if (new_progress > total_pages) new_progress = total_pages;
@@ -187,4 +189,4 @@ void update_progress_to_db(sqlite3 *db, int id){
 */
 
 
-}
+//}

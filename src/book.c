@@ -6,10 +6,6 @@
 #include <stdbool.h>
 #include "db_manager.h"
 
-enum input_mode{
-    TITLE, AUTHOR, PAGE, PUBLISH_DATE
-};
-
 //1
 void print_help() {
     printf("使用可能なコマンド:\n");
@@ -21,6 +17,10 @@ void print_help() {
 }
 
 void add_book(sqlite3 *db){
+
+    enum input_mode{
+        TITLE, AUTHOR, PAGE, PUBLISH_DATE
+    };
 
     enum input_mode mode;
     mode = TITLE;
@@ -111,7 +111,6 @@ void add_book(sqlite3 *db){
     }
 
     if(exit_data){
-        // TODO: データベースに保存する処理を書く
         register_book_to_db(book, db);
     }
 }
@@ -139,18 +138,163 @@ void list_books(sqlite3 *db) {
     sqlite3_finalize(stmt);
 }
 
-void update_progress(sqlite3 *db) {
-    int id = 0;
-    char buf[4096];
-    printf("対象の本のIDを入力してください：");
-    if(fgets(buf, 4096, stdin) != NULL){
-        id = atoi(buf);
+typedef struct range_node{
+    int start_page;
+    int end_page;
+    struct range_node *previous;
+    struct range_node *next;
+}range_node_t;
+
+range_node_t* seek_last_node(range_node_t *range_node){
+
+    range_node_t *target_node = NULL;
+    
+    if(range_node->next == NULL){// last
+        target_node = range_node; 
     }else{
-        fprintf(stderr,"err\n");
+        target_node =  seek_last_node(range_node->next);            
+    }
+    
+   return target_node;
+}
+
+range_node_t* append_range_node(range_node_t *head, range_node_t *new_node){
+    
+    range_node_t* last_node;
+    last_node = seek_last_node(head);
+    last_node->next = new_node;
+    new_node->previous = last_node;
+
+    return head;
+}
+
+void dump_page_range_list(range_node_t *range_node){
+
+    if(range_node->start_page == range_node->end_page){
+        if(range_node->start_page != -1)
+            printf("| %d |", range_node->start_page);
+    }else{
+        printf("| %d - %d |", range_node->start_page, range_node->end_page);
+    }
+
+    if(range_node->next != NULL){
+        printf("->");
+        dump_page_range_list(range_node->next);
+    }
+}
+
+void dump_page_range_list_reverse(range_node_t *range_node){
+
+    if(range_node->start_page == range_node->end_page){
+        if(range_node->start_page != -1)
+            printf("| %d |", range_node->start_page);
+    }else{
+        printf("| %d - %d |", range_node->start_page, range_node->end_page);
+    }
+    
+    if(range_node->previous != NULL){
+        printf("->");
+        dump_page_range_list_reverse(range_node->previous);
+    }
+
+}
+
+
+void update_progress(sqlite3 *db) {
+    
+    printf("対象の本のIDを入力してください：");
+
+    int book_id = 0;
+    char book_id_buffer[128];
+    if(fgets(book_id_buffer, 128, stdin) != NULL){
+        book_id = atoi(book_id_buffer);
+    }else{
+        fprintf(stderr,"入力されたIDに該当する本が見つかりませんでした.\n");
         return;
     }
-    update_progress_to_db(db,id);//進捗のデータベース書き込み処理
+    
+    (void)book_id; // silent compiler warnings 
+
+    printf("今日読んだページを入力\n\
+            ：例）1ページと50ページのみ読んだ場合 1,50\n \
+            例）1ページから50ページの区間を読んだ場合 1-100\n");
+
+    char read_page_str[4096];
+    if(fgets(read_page_str, 4096, stdin) == NULL){
+        return ;
+    }
+
+    char **page_ranges = (char **)malloc(sizeof(char*)*4096);
+    int number_of_ranges = 0;
+    page_ranges[number_of_ranges] = strtok(read_page_str, ",");
+
+
+    do{
+        number_of_ranges++;
+    }while((page_ranges[number_of_ranges] = strtok(NULL, ",")) != NULL);
+
+    int start_pages[4096];
+    int end_pages[4096];
+
+    for(int i=0; i<number_of_ranges; i++){
+
+        char *start_page_str = strtok(page_ranges[i], "-");
+
+        int start_page;
+        if((start_page = atoi(start_page_str)) != 0){
+            start_pages[i] = start_page;
+        }else{
+            fprintf(stderr, "数値以外が入力されました.\n");
+            return;
+        }
+
+        char *end_page_str = strtok(NULL, "-");
+        
+        if(end_page_str == NULL){ // it is not a range
+            end_pages[i] = start_page;
+
+        }else{ // it is a range
+            int end_page;
+            if((end_page = atoi(end_page_str)) != 0){
+                end_pages[i] = end_page;
+            }else{
+                fprintf(stderr, "数値以外が入力されました.\n");
+                return;
+            }
+        }
+    }
+
+    for(int i=0; i<number_of_ranges; i++){
+        printf("start: %d, end :%d\n", start_pages[i], end_pages[i]);
+    }
+
+    range_node_t *head_node = (range_node_t*)malloc(sizeof(range_node_t));
+    head_node->start_page = -1;
+    head_node->end_page = -1;
+    head_node->previous = NULL;
+    head_node->next = NULL;
+
+
+    for(int i=0; i<number_of_ranges; i++){
+        range_node_t* new_node = (range_node_t*)malloc(sizeof(range_node_t));
+        new_node->start_page = start_pages[i];
+        new_node->end_page = end_pages[i];
+        new_node->previous = NULL;
+        new_node->next = NULL;
+
+        head_node = append_range_node(head_node, new_node);
+    }
+
+    // unsorted
+    dump_page_range_list(head_node);
+
+    // sorted
+    dump_page_range_list(head_node);
+
+    // update_progress_to_db(db, id);//進捗のデータベース書き込み処理
 }
+
+
 
 
 int main() {
