@@ -168,6 +168,46 @@ range_node_t* append_range_node(range_node_t *head, range_node_t *new_node){
     return head;
 }
 
+range_node_t* seek_swap_node(range_node_t *range_node, int start_page){
+
+    range_node_t *target_node = NULL;
+    
+    if((range_node->start_page != -1) &&
+            ((range_node->start_page) < start_page)){
+        target_node = range_node; 
+    }else if(range_node-> next != NULL){
+        target_node =  seek_swap_node(range_node->next, start_page);            
+    }
+
+    return target_node;
+}
+
+void sort_range_list(range_node_t *head, range_node_t *current_node){
+   
+    if(current_node->next == NULL){
+        return;
+    }
+
+    range_node_t* swapped_node;
+    swapped_node = seek_swap_node(current_node, current_node->start_page);
+
+    if(swapped_node != NULL){
+        int temp_start_page, temp_end_page;
+        temp_start_page = current_node->start_page;
+        temp_end_page = current_node->end_page;
+
+        current_node->start_page =  swapped_node->start_page;
+        current_node ->end_page =  swapped_node -> end_page;
+
+        swapped_node->start_page = temp_start_page;
+        swapped_node->end_page = temp_end_page;
+    }
+
+    sort_range_list(head, current_node->next);
+}
+
+
+// for debugging
 void dump_page_range_list(range_node_t *range_node){
 
     if(range_node->start_page == range_node->end_page){
@@ -183,6 +223,7 @@ void dump_page_range_list(range_node_t *range_node){
     }
 }
 
+// for debugging
 void dump_page_range_list_reverse(range_node_t *range_node){
 
     if(range_node->start_page == range_node->end_page){
@@ -288,9 +329,16 @@ void update_progress(sqlite3 *db) {
     // unsorted
     dump_page_range_list(head_node);
 
+    printf("\n");
+
+    sort_range_list(head_node, head_node);
+
+    printf("\n");
+
     // sorted
     dump_page_range_list(head_node);
 
+    printf("\n");
     // update_progress_to_db(db, id);//進捗のデータベース書き込み処理
 }
 
