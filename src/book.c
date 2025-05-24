@@ -1,12 +1,56 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <sqlite3.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+#include "book.h"
 #include "db_manager.h"
 
-//1
+int main() {
+    char buffer[512];
+    char command[256];
+    sqlite3 *db = initialize_sqlite3();
+
+    printf("コマンドを入力してください（[Ctrl]+C または exit で終了）：\n");
+    print_help();
+
+    while (1) {
+        printf("command>> ");
+
+        // fgetsで1行読み取り
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+            continue;
+        }
+
+        // 改行を除去
+        buffer[strcspn(buffer, "\n")] = '\0';
+        if (sscanf(buffer, "%255s", command) != 1) {
+            continue;
+        }
+
+        // コマンド分岐
+        if (strcmp(command, "add") == 0) {
+            add_book(db);
+        } else if (strcmp(command, "list") == 0) {
+            list_books(db);
+        } else if (strcmp(command, "progress") == 0) {
+            update_progress(db);
+        } else if (strcmp(command, "help") == 0) {
+            print_help();
+        } else if (strcmp(command, "exit") == 0) {
+            printf("終了します。\n");
+            break;
+        } else {
+            printf("不明なコマンドです。helpで使用可能なコマンドを確認できます。\n");
+        }
+    }
+
+    sqlite3_close(db);
+    return 0;
+}
+
+// 使用可能なコマンド一覧を提供する関数
 void print_help() {
     printf("使用可能なコマンド:\n");
     printf("  add   - 本を追加\n");
@@ -16,6 +60,8 @@ void print_help() {
     printf("  exit  - プログラムを終了\n");
 }
 
+
+// 新しい本をデータベースに追加する関数
 void add_book(sqlite3 *db){
 
     enum input_mode{
@@ -24,13 +70,11 @@ void add_book(sqlite3 *db){
 
     enum input_mode mode;
     mode = TITLE;
-    book_t book;
 
-    book.authors = (char**)malloc(sizeof(char *) * 10);
-    book.number_of_author = 0;
+    book_t *book;
+    book = create_new_book();
 
     bool exit_data = false;
-    bool is_first = true;
 
     while(!exit_data){
 
@@ -53,56 +97,40 @@ void add_book(sqlite3 *db){
         // get user's input 
         char *line = (char *)malloc(sizeof(char)*1024);
 
-        if(is_first){
-            int c;
-            while((c = getchar()) !='\n'){}    
-            is_first = false;
-        }
-
         if(fgets(line, 1024, stdin) != NULL){
             line[strcspn(line, "\n")] = '\0';
         }
 
         // quit
-        if(strcmp(line, "quit")==0)
+        if(strcmp(line, "quit")==0){
+            destroy_book(book);
             return;
+        }
 
         // store 
         switch(mode){
             case TITLE:
-                book.title = (char *)malloc(sizeof(char)* 1024);
-                if(book.title == NULL){
-                    fprintf(stderr, "malloc error!\n");
-                    exit(EXIT_FAILURE);
-                }
-                strcpy(book.title, line);
+                strcpy(book->title, line);
                 mode = AUTHOR;
                 break;
+
             case AUTHOR:
                 if(strlen(line) < 1){
                     mode = PAGE;
                     break;
                 }
                 // add author 
-                book.authors[book.number_of_author] = (char *)malloc(sizeof(char)*1024);
-                if(book.authors[book.number_of_author] == NULL){
-                    fprintf(stderr, "malloc error!\n");
-                    exit(EXIT_FAILURE);
-                }
-                strcpy(book.authors[book.number_of_author], line);
-                book.number_of_author++;
+                strcpy(book->authors[book->number_of_author], line);
+                book->number_of_author++;
                 break;
+
             case PAGE:
-                book.page = atoi(line);
+                book->page = atoi(line);
                 mode = PUBLISH_DATE;                
                 break;
+
             case PUBLISH_DATE:
-                book.publish_date = (char *)malloc(sizeof(char)* 1024);
-                if(book.publish_date == NULL){
-                    fprintf(stderr, "malloc error!\n");
-                    exit(EXIT_FAILURE);
-                }
-                strcpy(book.publish_date, line);
+                strcpy(book->publish_date, line);
                 exit_data = true;
                 break;
         }
@@ -110,9 +138,10 @@ void add_book(sqlite3 *db){
         free(line);
     }
 
-    if(exit_data){
-        register_book_to_db(book, db);
-    }
+    if(exit_data)
+        register_book_to_db(*book, db);
+
+    destroy_book(book);
 }
 
 void list_books(sqlite3 *db) {
@@ -138,12 +167,6 @@ void list_books(sqlite3 *db) {
     sqlite3_finalize(stmt);
 }
 
-typedef struct range_node{
-    int start_page;
-    int end_page;
-    struct range_node *previous;
-    struct range_node *next;
-}range_node_t;
 
 range_node_t* seek_last_node(range_node_t *range_node){
 
@@ -331,7 +354,8 @@ void update_progress(sqlite3 *db) {
 
     printf("\n");
 
-    sort_range_list(head_node, head_node);
+    for(int i=0; i<number_of_ranges; i++)
+        sort_range_list(head_node, head_node);
 
     printf("\n");
 
@@ -343,47 +367,3 @@ void update_progress(sqlite3 *db) {
 }
 
 
-
-
-int main() {
-    char buffer[512];
-    char command[256];
-    sqlite3 *db = initialize_sqlite3();
-
-    printf("コマンドを入力してください（[Ctrl]+C または exit で終了）：\n");
-    print_help();
-
-    while (1) {
-        printf("command>> ");
-
-        // fgetsで1行読み取り
-        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
-            continue;
-        }
-
-        // 改行を除去
-        buffer[strcspn(buffer, "\n")] = '\0';
-        if (sscanf(buffer, "%255s", command) != 1) {
-            continue;
-        }
-
-        // コマンド分岐
-        if (strcmp(command, "add") == 0) {
-            add_book(db);
-        } else if (strcmp(command, "list") == 0) {
-            list_books(db);
-        } else if (strcmp(command, "progress") == 0) {
-            update_progress(db);
-        } else if (strcmp(command, "help") == 0) {
-            print_help();
-        } else if (strcmp(command, "exit") == 0) {
-            printf("終了します。\n");
-            break;
-        } else {
-            printf("不明なコマンドです。helpで使用可能なコマンドを確認できます。\n");
-        }
-    }
-
-    sqlite3_close(db);
-    return 0;
-}
