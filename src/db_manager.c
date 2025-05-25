@@ -70,6 +70,69 @@ void register_book_to_db(book_t book, sqlite3 *db){
     free(author_str);
 }
 
+// book_t型のnew bookを作成して初期化した状態で返す関数
+book_t* create_new_book(){
+
+    book_t* new_book;
+    new_book = (book_t*)malloc(sizeof(book_t));
+    if(new_book == NULL){
+        fprintf(stderr, "could not allocate sufficient memory for new_book\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // これ以降でnew_bookの初期化をする
+   
+    new_book->title = (char *)malloc(sizeof(char)* 1024);
+    if(new_book->title == NULL){
+        fprintf(stderr, "could not allocate sufficient memory for title!\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // 10は暫定的な値です 
+    new_book->authors = (char**)malloc(sizeof(char *) * 10);
+    if(new_book->authors == NULL){
+        fprintf(stderr, "could not allocate sufficient memory for authors\n");
+        exit(EXIT_FAILURE);
+    }
+
+    for(int i=0; i<10; i++){
+        new_book->authors[i] = (char *)malloc(sizeof(char)*1024);
+        if(new_book->authors[i] == NULL){
+            fprintf(stderr, "malloc error!\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    new_book->number_of_author = 0;
+    new_book->page = 0;
+    
+    new_book->publish_date = (char *)malloc(sizeof(char)* 1024);
+    if(new_book->publish_date == NULL){
+        fprintf(stderr, "could not allocate sufficient memory for publish_date\n");
+        exit(EXIT_FAILURE);
+    }
+
+    new_book->progress = 0;
+
+    return new_book;
+}
+
+// 不要になったbook_tを破棄するための関数です
+void destroy_book(book_t *destroyed_book){
+
+    free(destroyed_book->title);
+
+    // 中身の要素に割り当てられているメモリを解放した後に，それを指している
+    // ポインタ配列を解放します
+    for(int i=0; i<destroyed_book->number_of_author; i++){
+        if(destroyed_book->authors[i] != NULL)
+            free(destroyed_book->authors[i]);
+    }
+    free(destroyed_book->authors);
+    free(destroyed_book->publish_date);
+
+    free(destroyed_book);
+}
 void set_node(int start, int end ,node_t *head){
 
 }
