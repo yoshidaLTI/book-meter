@@ -276,37 +276,38 @@ range_node_t *seek_marge_node(range_node_t *current_node, range_node_t *next_nod
     }
     return target_node;
 }
-void marge_range_list(range_node_t *current_node){
+
+int marge_range_list(range_node_t *current_node, int number_of_ranges){
     if(current_node->start_page == -1)
-        marge_range_list(current_node->next);
+        number_of_ranges = marge_range_list(current_node->next, number_of_ranges);
         
     //not exit next node & finish
     if(current_node->next == NULL){
-        return;
+        return number_of_ranges;
     }
     //seek marge node
     range_node_t *marged_node =NULL;
     marged_node = seek_marge_node(current_node, current_node->next);
 
     if(marged_node != NULL){
-
-        printf("marged_node\nstart:%d end:%d\n",marged_node->start_page,marged_node->end_page);
-        
         //should marge
-        if(current_node->end_page >= marged_node->start_page+1 && current_node->start_page >= marged_node->end_page+1){
+        if(current_node->start_page <= marged_node->start_page 
+            && current_node->end_page >= marged_node->end_page){
             //内包
             current_node->next = marged_node->next;
-
-            return;
-        }else{
+            return --number_of_ranges;
+        }
+        if(current_node->end_page >= marged_node->start_page){
             //一部重なり、隣接の場合
             current_node->end_page = marged_node->end_page;
             current_node->next = marged_node->next;
-            return;
+            
+            return --number_of_ranges;
         }
     }
     //next marge prosess
-    marge_range_list(current_node->next);
+    number_of_ranges = marge_range_list(current_node->next, number_of_ranges);
+    return number_of_ranges;
 }
 
 
@@ -411,8 +412,10 @@ void update_progress(sqlite3 *db) {
     printf("\n");
 
     // marge
-    marge_range_list(head_node);
-
+    for(int i=0; i <  number_of_ranges+1; i++){
+        number_of_ranges = marge_range_list(head_node, number_of_ranges);
+    }
+    
 
     printf("\n");
 
