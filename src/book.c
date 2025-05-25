@@ -263,6 +263,52 @@ void dump_page_range_list_reverse(range_node_t *range_node){
 
 }
 
+range_node_t *seek_marge_node(range_node_t *current_node, range_node_t *next_node){
+    range_node_t* target_node = NULL;
+
+    if((current_node->end_page+1) >= next_node->start_page ){
+        target_node = next_node;
+        return target_node;
+    }
+    if(next_node->next != NULL){
+        //next range
+        target_node = seek_marge_node(current_node->next, next_node->next);
+    }
+    return target_node;
+}
+void marge_range_list(range_node_t *current_node){
+    if(current_node->start_page == -1)
+        marge_range_list(current_node->next);
+        
+    //not exit next node & finish
+    if(current_node->next == NULL){
+        return;
+    }
+    //seek marge node
+    range_node_t *marged_node =NULL;
+    marged_node = seek_marge_node(current_node, current_node->next);
+
+    if(marged_node != NULL){
+
+        printf("marged_node\nstart:%d end:%d\n",marged_node->start_page,marged_node->end_page);
+        
+        //should marge
+        if(current_node->end_page >= marged_node->start_page+1 && current_node->start_page >= marged_node->end_page+1){
+            //内包
+            current_node->next = marged_node->next;
+
+            return;
+        }else{
+            //一部重なり、隣接の場合
+            current_node->end_page = marged_node->end_page;
+            current_node->next = marged_node->next;
+            return;
+        }
+    }
+    //next marge prosess
+    marge_range_list(current_node->next);
+}
+
 
 void update_progress(sqlite3 *db) {
     
@@ -362,6 +408,15 @@ void update_progress(sqlite3 *db) {
     // sorted
     dump_page_range_list(head_node);
 
+    printf("\n");
+
+    // marge
+    marge_range_list(head_node);
+
+
+    printf("\n");
+
+    dump_page_range_list(head_node);
     printf("\n");
     // update_progress_to_db(db, id);//進捗のデータベース書き込み処理
 }
