@@ -1,0 +1,12 @@
+# Visual Studio Code 
+.vscode
+
+# Vim
+*.swp
+
+# bin
+/bin/*
+
+# obj
+/obj/*
+
