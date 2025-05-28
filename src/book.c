@@ -297,7 +297,7 @@ int marge_range_list(range_node_t *current_node, int number_of_ranges){
             current_node->next = marged_node->next;
             return --number_of_ranges;
         }
-        if(current_node->end_page >= marged_node->start_page){
+        if(current_node->end_page+1 >= marged_node->start_page){
             //一部重なり、隣接の場合
             current_node->end_page = marged_node->end_page;
             current_node->next = marged_node->next;
@@ -423,5 +423,3 @@ void update_progress(sqlite3 *db) {
     printf("\n");
     // update_progress_to_db(db, id);//進捗のデータベース書き込み処理
 }
-
-
