@@ -1,3 +1,5 @@
+//これはテストです
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -313,27 +315,42 @@ int marge_range_list(range_node_t *current_node, int number_of_ranges){
 
 void update_progress(sqlite3 *db) {
     
-    printf("対象の本のIDを入力してください：");
+    printf("対象の本のIDを入力してください：(終了時はquit)");
 
     int book_id = 0;
     char book_id_buffer[128];
     if(fgets(book_id_buffer, 128, stdin) != NULL){
+        // quit
+        book_id_buffer[strcspn(book_id_buffer, "\n")] = '\0';//'\n'を'\0'に変更する
+        if(strcmp(book_id_buffer, "quit")==0){
+            return;
+    }
         book_id = atoi(book_id_buffer);
     }else{
         fprintf(stderr,"入力されたIDに該当する本が見つかりませんでした.\n");
         return;
     }
+
+
     
     (void)book_id; // silent compiler warnings 
 
     printf("今日読んだページを入力\n\
             ：例）1ページと50ページのみ読んだ場合 1,50\n \
-            例）1ページから50ページの区間を読んだ場合 1-100\n");
+            例）1ページから50ページの区間を読んだ場合 1-100 150-200\n(終了時はquit)");
 
     char read_page_str[4096];
     if(fgets(read_page_str, 4096, stdin) == NULL){
         return ;
     }
+
+    // quit
+    read_page_str[strcspn(read_page_str, "\n")] = '\0';//'\n'を'\0'に変更する
+    if(strcmp(read_page_str, "quit")==0){
+        return;
+    }
+
+
 
     char **page_ranges = (char **)malloc(sizeof(char*)*4096);
     int number_of_ranges = 0;
@@ -348,6 +365,33 @@ void update_progress(sqlite3 *db) {
     int end_pages[4096];
 
     for(int i=0; i<number_of_ranges; i++){
+        //ユーザの入力ミス、文法ミスを判定してミスがある場合は入力を無効にします
+        /*正しい入力の条件
+        エンドページがスタートページ以上、
+        '-'の数が1つ、
+        数字が二つ、
+        入力が数字
+        */
+        /*
+        予想されるミス
+        1-2-3,abc,1-a,1-,-3
+        */
+        int hyphen_count = 0;
+
+        for (int j = 0; j < strlen(page_ranges[i]); j++) {
+            if (page_ranges[i][j] == '-') {
+                hyphen_count++;
+            }
+        }
+        if(hyphen_count>=2){
+            fprintf(stderr, "読書ページ区間の指定が正しくありません\n");
+            return;
+        }
+
+        if(page_ranges[i][0] == '-'){
+            fprintf(stderr, "開始ページが未指定です\n");
+            return;
+        }
 
         char *start_page_str = strtok(page_ranges[i], "-");
 
@@ -360,10 +404,13 @@ void update_progress(sqlite3 *db) {
         }
 
         char *end_page_str = strtok(NULL, "-");
-        
+
         if(end_page_str == NULL){ // it is not a range
             end_pages[i] = start_page;
-
+            if(hyphen_count == 1){
+                fprintf(stderr, "終了ページが未指定です\n");
+                return;
+            }
         }else{ // it is a range
             int end_page;
             if((end_page = atoi(end_page_str)) != 0){
@@ -373,7 +420,14 @@ void update_progress(sqlite3 *db) {
                 return;
             }
         }
+        
+        if(start_pages[i] > end_pages[i]){
+            fprintf(stderr, "ページ区間が正しくありません");
+            return;
+        }
     }
+
+
 
     for(int i=0; i<number_of_ranges; i++){
         printf("start: %d, end :%d\n", start_pages[i], end_pages[i]);
