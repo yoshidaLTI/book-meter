@@ -27,6 +27,6 @@ typedef struct node_t{
     struct node_t *previous_node;
     struct node_t *next_node;
 }node_t;
-void update_progress_to_db(sqlite3 *db,int id);
+void update_progress_to_db(sqlite3 *db,int id, char *new_progress);
 
 sqlite3* initialize_sqlite3();

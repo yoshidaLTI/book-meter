@@ -1,5 +1,3 @@
-//これはテストです
-
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -8,6 +6,7 @@
 
 #include "book.h"
 #include "db_manager.h"
+
 
 int main() {
     char buffer[512];
@@ -66,7 +65,7 @@ void print_help() {
 // 新しい本をデータベースに追加する関数
 void add_book(sqlite3 *db){
 
-    enum input_mode{
+    enum input_mode{ //mode で管理
         TITLE, AUTHOR, PAGE, PUBLISH_DATE
     };
 
@@ -146,24 +145,28 @@ void add_book(sqlite3 *db){
     destroy_book(book);
 }
 
+
 void list_books(sqlite3 *db) {
-    const char *sql = "SELECT id, title, author, pages, publish_date, progress FROM books;";
+    const char *sql = "SELECT id, title, author, pages, publish_date,\
+     progress, progress_str FROM books;";
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
 
     printf("登録された本の一覧：\n");
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         int id = sqlite3_column_int(stmt, 0);
-        printf("id %d\n", id);
+        //printf("id %d\n", id);
         const unsigned char *title = sqlite3_column_text(stmt, 1);
-        printf("title %s\n", title);
+        //printf("title %s\n", title);
         const unsigned char *author = sqlite3_column_text(stmt, 2);
-        printf("author %s\n", author);
+        //printf("author %s\n", author);
         int pages = sqlite3_column_int(stmt, 3);
         const unsigned char *publish_date = sqlite3_column_text(stmt, 4);
         int progress = sqlite3_column_int(stmt, 5);
-
-        printf("[%d] %s | %s | %dページ | 発行日: %s | 読了: %dページ\n", id, title, author, pages, publish_date, progress);
+        const unsigned char *progress_str = sqlite3_column_text(stmt, 6);
+        
+        printf("[%d] %s | %s | %dページ | 発行日: %s | 読了: %dページ(%s)\n",
+             id, title, author, pages, publish_date, progress, progress_str);
     }
 
     sqlite3_finalize(stmt);
@@ -248,6 +251,22 @@ void dump_page_range_list(range_node_t *range_node){
     }
 }
 
+// ノードの範囲を文字列型にする
+char* cat_range_string(range_node_t *range_node, char *range_str){
+    char page_range_buckups[1024] = {}; 
+    strcpy(page_range_buckups,range_str);
+    if(range_node->start_page == range_node->end_page){ //not range
+        if(range_node->start_page != -1)
+            sprintf(range_str," %s,%d", page_range_buckups,range_node->start_page);
+    }else{
+        sprintf(range_str,"%s,%d-%d", page_range_buckups,range_node->start_page, range_node->end_page);
+    }
+    if(range_node->next != NULL){
+        cat_range_string(range_node->next, range_str);
+    }
+    return(range_str);
+}
+
 // for debugging
 void dump_page_range_list_reverse(range_node_t *range_node){
 
@@ -313,44 +332,30 @@ int marge_range_list(range_node_t *current_node, int number_of_ranges){
 }
 
 
-void update_progress(sqlite3 *db) {
+void update_progress(sqlite3 *db ) {
     
-    printf("対象の本のIDを入力してください：(終了時はquit)");
+    list_books(db);
+    printf("対象の本のIDを入力してください：");
 
     int book_id = 0;
     char book_id_buffer[128];
     if(fgets(book_id_buffer, 128, stdin) != NULL){
-        // quit
-        book_id_buffer[strcspn(book_id_buffer, "\n")] = '\0';//'\n'を'\0'に変更する
-        if(strcmp(book_id_buffer, "quit")==0){
-            return;
-    }
         book_id = atoi(book_id_buffer);
     }else{
         fprintf(stderr,"入力されたIDに該当する本が見つかりませんでした.\n");
         return;
     }
-
-
     
     (void)book_id; // silent compiler warnings 
 
     printf("今日読んだページを入力\n\
             ：例）1ページと50ページのみ読んだ場合 1,50\n \
-            例）1ページから50ページの区間を読んだ場合 1-100 150-200\n(終了時はquit)");
+            例）1ページから50ページの区間を読んだ場合 1-100\n");
 
     char read_page_str[4096];
     if(fgets(read_page_str, 4096, stdin) == NULL){
         return ;
     }
-
-    // quit
-    read_page_str[strcspn(read_page_str, "\n")] = '\0';//'\n'を'\0'に変更する
-    if(strcmp(read_page_str, "quit")==0){
-        return;
-    }
-
-
 
     char **page_ranges = (char **)malloc(sizeof(char*)*4096);
     int number_of_ranges = 0;
@@ -365,33 +370,6 @@ void update_progress(sqlite3 *db) {
     int end_pages[4096];
 
     for(int i=0; i<number_of_ranges; i++){
-        //ユーザの入力ミス、文法ミスを判定してミスがある場合は入力を無効にします
-        /*正しい入力の条件
-        エンドページがスタートページ以上、
-        '-'の数が1つ、
-        数字が二つ、
-        入力が数字
-        */
-        /*
-        予想されるミス
-        1-2-3,abc,1-a,1-,-3
-        */
-        int hyphen_count = 0;
-
-        for (int j = 0; j < strlen(page_ranges[i]); j++) {
-            if (page_ranges[i][j] == '-') {
-                hyphen_count++;
-            }
-        }
-        if(hyphen_count>=2){
-            fprintf(stderr, "読書ページ区間の指定が正しくありません\n");
-            return;
-        }
-
-        if(page_ranges[i][0] == '-'){
-            fprintf(stderr, "開始ページが未指定です\n");
-            return;
-        }
 
         char *start_page_str = strtok(page_ranges[i], "-");
 
@@ -404,13 +382,10 @@ void update_progress(sqlite3 *db) {
         }
 
         char *end_page_str = strtok(NULL, "-");
-
+        
         if(end_page_str == NULL){ // it is not a range
             end_pages[i] = start_page;
-            if(hyphen_count == 1){
-                fprintf(stderr, "終了ページが未指定です\n");
-                return;
-            }
+
         }else{ // it is a range
             int end_page;
             if((end_page = atoi(end_page_str)) != 0){
@@ -420,14 +395,7 @@ void update_progress(sqlite3 *db) {
                 return;
             }
         }
-        
-        if(start_pages[i] > end_pages[i]){
-            fprintf(stderr, "ページ区間が正しくありません");
-            return;
-        }
     }
-
-
 
     for(int i=0; i<number_of_ranges; i++){
         printf("start: %d, end :%d\n", start_pages[i], end_pages[i]);
@@ -473,7 +441,19 @@ void update_progress(sqlite3 *db) {
 
     printf("\n");
 
-    dump_page_range_list(head_node);
-    printf("\n");
-    // update_progress_to_db(db, id);//進捗のデータベース書き込み処理
+    char *range_str = (char*)malloc(sizeof(char)*1024);
+    range_str[0] = '\0'; 
+    if(range_str == NULL){
+        fprintf(stderr, "could not allocate sufficient memory for range_str\n");
+        exit(EXIT_FAILURE);
+    }
+
+    //for debuging
+    // dump_page_range_list(head_node);
+    //printf("\n");
+    
+    char *new_progress = cat_range_string(head_node, range_str);
+    update_progress_to_db(db, book_id , new_progress);//進捗のデータベース書き込み処理
+    free(range_str);
+
 }
