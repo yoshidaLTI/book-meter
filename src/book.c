@@ -6,47 +6,47 @@
 
 #include "book.h"
 #include "db_manager.h"
+#include "book_processor.h"
+#include "debug_utils.h"
 
 
 int main() {
-    char buffer[512];
+    char user_input[512];
     char command[256];
     sqlite3 *db = initialize_sqlite3();
 
     printf("コマンドを入力してください（[Ctrl]+C または exit で終了）：\n");
     print_help();
 
-    while (1) {
+    /* メインループ */
+    while (true) {
         printf("command>> ");
 
-        // fgetsで1行読み取り
-        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+        /* ユーザの入力を受け付ける */
+        if (fgets(user_input, sizeof(user_input), stdin) == NULL) 
             continue;
-        }
 
-        // 改行を除去
-        buffer[strcspn(buffer, "\n")] = '\0';
-        if (sscanf(buffer, "%255s", command) != 1) {
+        /* 改行を除去 */
+        user_input[strcspn(user_input, "\n")] = '\0';
+        if (sscanf(user_input, "%255s", command) != 1) 
             continue;
-        }
 
-        // コマンド分岐
-        if (strcmp(command, "add") == 0) {
+        /* コマンドに対応した機能を呼び出し */
+        if (strcmp(command, "add") == 0) 
             add_book(db);
-        } else if (strcmp(command, "list") == 0) {
+        else if (strcmp(command, "list") == 0) 
             list_books(db);
-        } else if (strcmp(command, "progress") == 0) {
+        else if (strcmp(command, "progress") == 0) 
             update_progress(db);
-        } else if (strcmp(command, "help") == 0) {
+        else if (strcmp(command, "help") == 0) 
             print_help();
-        } else if (strcmp(command, "exit") == 0) {
+        else if (strcmp(command, "exit") == 0) {
             printf("終了します。\n");
             break;
-        } else {
-            printf("不明なコマンドです。helpで使用可能なコマンドを確認できます。\n");
-        }
+        } else 
+            printf("不明なコマンドです。helpで使用可能なコマンドを確認\
+                    できます。\n");
     }
-
     sqlite3_close(db);
     return 0;
 }
@@ -65,21 +65,24 @@ void print_help() {
 // 新しい本をデータベースに追加する関数
 void add_book(sqlite3 *db){
 
-    enum input_mode{ //mode で管理
-        TITLE, AUTHOR, PAGE, PUBLISH_DATE
-    };
-
-    enum input_mode mode;
-    mode = TITLE;
-
+    /* 空の本の新規作成 */
     book_t *book;
     book = create_new_book();
 
-    bool exit_data = false;
+    /* 入力モード */
+    enum input_mode{
+        TITLE,
+        AUTHOR,
+        PAGE,
+        PUBLISH_DATE
+    };
+    enum input_mode mode;
+    mode = TITLE;
 
+    bool exit_data = false;
     while(!exit_data){
 
-        // prompt 
+        /* プロンプトを表示 */
         switch(mode){
             case TITLE:
                 printf("本のタイトルを入力してください：(終了時はquit)");
@@ -95,20 +98,19 @@ void add_book(sqlite3 *db){
                 break;
         }
     
-        // get user's input 
+        /* ユーザの入力を受け付ける*/
         char *line = (char *)malloc(sizeof(char)*1024);
-
         if(fgets(line, 1024, stdin) != NULL){
             line[strcspn(line, "\n")] = '\0';
         }
 
-        // quit
+        /* quitコマンド．格納処理を中断*/
         if(strcmp(line, "quit")==0){
             destroy_book(book);
             return;
         }
 
-        // store 
+        /* book_tへのデータの格納 */
         switch(mode){
             case TITLE:
                 strcpy(book->title, line);
@@ -116,11 +118,12 @@ void add_book(sqlite3 *db){
                 break;
 
             case AUTHOR:
+
+                /* 空行が打たれたら著者の入力を終了 */ 
                 if(strlen(line) < 1){
                     mode = PAGE;
                     break;
                 }
-                // add author 
                 strcpy(book->authors[book->number_of_author], line);
                 book->number_of_author++;
                 break;
@@ -135,7 +138,6 @@ void add_book(sqlite3 *db){
                 exit_data = true;
                 break;
         }
-
         free(line);
     }
 
@@ -145,7 +147,7 @@ void add_book(sqlite3 *db){
     destroy_book(book);
 }
 
-
+/* 登録された本の情報を一覧する関数 */
 void list_books(sqlite3 *db) {
     const char *sql = "SELECT id, title, author, pages, publish_date,\
      progress, progress_str FROM books;";
@@ -172,172 +174,16 @@ void list_books(sqlite3 *db) {
     sqlite3_finalize(stmt);
 }
 
-
-range_node_t* seek_last_node(range_node_t *range_node){
-
-    range_node_t *target_node = NULL;
-    
-    if(range_node->next == NULL){// last
-        target_node = range_node; 
-    }else{
-        target_node =  seek_last_node(range_node->next);            
-    }
-    
-   return target_node;
-}
-
-range_node_t* append_range_node(range_node_t *head, range_node_t *new_node){
-    
-    range_node_t* last_node;
-    last_node = seek_last_node(head);
-    last_node->next = new_node;
-    new_node->previous = last_node;
-
-    return head;
-}
-
-range_node_t* seek_swap_node(range_node_t *range_node, int start_page){
-
-    range_node_t *target_node = NULL;
-    
-    if((range_node->start_page != -1) &&
-            ((range_node->start_page) < start_page)){
-        target_node = range_node; 
-    }else if(range_node-> next != NULL){
-        target_node =  seek_swap_node(range_node->next, start_page);            
-    }
-
-    return target_node;
-}
-
-void sort_range_list(range_node_t *head, range_node_t *current_node){
-   
-    if(current_node->next == NULL){
-        return;
-    }
-
-    range_node_t* swapped_node;
-    swapped_node = seek_swap_node(current_node, current_node->start_page);
-
-    if(swapped_node != NULL){
-        int temp_start_page, temp_end_page;
-        temp_start_page = current_node->start_page;
-        temp_end_page = current_node->end_page;
-
-        current_node->start_page =  swapped_node->start_page;
-        current_node ->end_page =  swapped_node -> end_page;
-
-        swapped_node->start_page = temp_start_page;
-        swapped_node->end_page = temp_end_page;
-    }
-
-    sort_range_list(head, current_node->next);
-}
-
-
-// for debugging
-void dump_page_range_list(range_node_t *range_node){
-
-    if(range_node->start_page == range_node->end_page){
-        if(range_node->start_page != -1)
-            printf("| %d |", range_node->start_page);
-    }else{
-        printf("| %d - %d |", range_node->start_page, range_node->end_page);
-    }
-
-    if(range_node->next != NULL){
-        printf("->");
-        dump_page_range_list(range_node->next);
-    }
-}
-
-// ノードの範囲を文字列型にする
-char* cat_range_string(range_node_t *range_node, char *range_str){
-    char page_range_buckups[1024] = {}; 
-    strcpy(page_range_buckups,range_str);
-    if(range_node->start_page == range_node->end_page){ //not range
-        if(range_node->start_page != -1)
-            sprintf(range_str," %s,%d", page_range_buckups,range_node->start_page);
-    }else{
-        sprintf(range_str,"%s,%d-%d", page_range_buckups,range_node->start_page, range_node->end_page);
-    }
-    if(range_node->next != NULL){
-        cat_range_string(range_node->next, range_str);
-    }
-    return(range_str);
-}
-
-// for debugging
-void dump_page_range_list_reverse(range_node_t *range_node){
-
-    if(range_node->start_page == range_node->end_page){
-        if(range_node->start_page != -1)
-            printf("| %d |", range_node->start_page);
-    }else{
-        printf("| %d - %d |", range_node->start_page, range_node->end_page);
-    }
-    
-    if(range_node->previous != NULL){
-        printf("->");
-        dump_page_range_list_reverse(range_node->previous);
-    }
-
-}
-
-range_node_t *seek_marge_node(range_node_t *current_node, range_node_t *next_node){
-    range_node_t* target_node = NULL;
-
-    if((current_node->end_page+1) >= next_node->start_page ){
-        target_node = next_node;
-        return target_node;
-    }
-    if(next_node->next != NULL){
-        //next range
-        target_node = seek_marge_node(current_node->next, next_node->next);
-    }
-    return target_node;
-}
-
-int marge_range_list(range_node_t *current_node, int number_of_ranges){
-    if(current_node->start_page == -1)
-        number_of_ranges = marge_range_list(current_node->next, number_of_ranges);
-        
-    //not exit next node & finish
-    if(current_node->next == NULL){
-        return number_of_ranges;
-    }
-    //seek marge node
-    range_node_t *marged_node =NULL;
-    marged_node = seek_marge_node(current_node, current_node->next);
-
-    if(marged_node != NULL){
-        //should marge
-        if(current_node->start_page <= marged_node->start_page 
-            && current_node->end_page >= marged_node->end_page){
-            //内包
-            current_node->next = marged_node->next;
-            return --number_of_ranges;
-        }
-        if(current_node->end_page+1 >= marged_node->start_page){
-            //一部重なり、隣接の場合
-            current_node->end_page = marged_node->end_page;
-            current_node->next = marged_node->next;
-            
-            return --number_of_ranges;
-        }
-    }
-    //next marge prosess
-    number_of_ranges = marge_range_list(current_node->next, number_of_ranges);
-    return number_of_ranges;
-}
-
-
+/* 本の読書進捗状況を更新するための関数*/
 void update_progress(sqlite3 *db ) {
     
+    /* IDを閲覧するために一覧を表示 */
     list_books(db);
-    printf("対象の本のIDを入力してください：");
+    printf("\n");
 
-    int book_id = 0;
+    /* 操作対象のIDをユーザ選択させる */
+    printf("対象の本のIDを入力してください：");
+    int  book_id = 0;
     char book_id_buffer[128];
     if(fgets(book_id_buffer, 128, stdin) != NULL){
         book_id = atoi(book_id_buffer);
@@ -346,11 +192,9 @@ void update_progress(sqlite3 *db ) {
         return;
     }
     
-    (void)book_id; // silent compiler warnings 
-
     printf("今日読んだページを入力\n\
             ：例）1ページと50ページのみ読んだ場合 1,50\n \
-            例）1ページから50ページの区間を読んだ場合 1-100\n");
+              例）1ページから50ページの区間を読んだ場合 1-100\n");
 
     char read_page_str[4096];
     if(fgets(read_page_str, 4096, stdin) == NULL){
@@ -360,7 +204,6 @@ void update_progress(sqlite3 *db ) {
     char **page_ranges = (char **)malloc(sizeof(char*)*4096);
     int number_of_ranges = 0;
     page_ranges[number_of_ranges] = strtok(read_page_str, ",");
-
 
     do{
         number_of_ranges++;
@@ -401,6 +244,7 @@ void update_progress(sqlite3 *db ) {
         printf("start: %d, end :%d\n", start_pages[i], end_pages[i]);
     }
 
+	/* rangeの初期化用関数を作っておくべき */
     range_node_t *head_node = (range_node_t*)malloc(sizeof(range_node_t));
     head_node->start_page = -1;
     head_node->end_page = -1;
@@ -420,25 +264,16 @@ void update_progress(sqlite3 *db ) {
 
     // unsorted
     dump_page_range_list(head_node);
-
-    printf("\n");
-
-    for(int i=0; i<number_of_ranges; i++)
-        sort_range_list(head_node, head_node);
-
     printf("\n");
 
     // sorted
+    head_node = sort_range_list(head_node, number_of_ranges);
     dump_page_range_list(head_node);
-
     printf("\n");
 
-    // marge
-    for(int i=0; i <  number_of_ranges+1; i++){
-        number_of_ranges = marge_range_list(head_node, number_of_ranges);
-    }
-    
-
+    // merged
+    head_node = eliminate_redundant_nodes(head_node, number_of_ranges);
+    dump_page_range_list(head_node);
     printf("\n");
 
     char *range_str = (char*)malloc(sizeof(char)*1024);
