@@ -4,66 +4,88 @@
 #include <sqlite3.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
 #include "db_manager.h"
 
+#define DB_NAME "book.db"
+
+/* 本の記録用のデータベースを作成する初期化関数*/
 sqlite3* initialize_sqlite3(){
     sqlite3 *db;
-    if (sqlite3_open("books.db", &db) != SQLITE_OK) {
+    if (sqlite3_open(DB_NAME, &db) != SQLITE_OK) {
         fprintf(stderr,"データベースを開けません：%s\n", sqlite3_errmsg(db));
         exit(1);
     }
+
+    /* FIXME: 2種類のテーブルを管理している理由が不明 */
+
+    /* add_book()で利用する本の追加用テーブル*/
     const char *create_books_sql =
         "CREATE TABLE IF NOT EXISTS books ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "title TEXT, "
-        "author TEXT, "
-        "pages INTEGER, "
-        "publish_date TEXT, "
-        "progress INTEGER DEFAULT 0, "
-        "progress_str TEXT"
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "   // 本のid 
+        "title TEXT, "                             // タイトル
+        "author TEXT, "                            // 著者 (複数の可能性あり)
+        "pages INTEGER, "                          // ページ数
+        "publish_date TEXT, "                      // 出版日
+        "progress INTEGER DEFAULT 0, "             // 進捗率
+        "progress_str TEXT"                        // 進捗ページ
         ");";
 
+    /* update_progress()で読書進捗更新用テーブル*/
     const char *create_log_sql =
-        "CREATE TABLE IF NOT EXISTS progress_log ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "book_id INTEGER,"
-        "date TEXT,"
-        "pages INTEGER,"
-        "FOREIGN KEY(book_id) REFERENCES books(id));";
+        "CREATE TABLE IF NOT EXISTS progress_log (" 
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"    
+        "book_id INTEGER,"                         // 本のid
+        "date TEXT,"                               // ?? 不明　これは何?
+        "pages INTEGER,"                           // 進捗率
+        "FOREIGN KEY(book_id) REFERENCES books(id)"
+        ");";
 
+    /* tableの作成 */
     char *err_msg = NULL;
-    if (sqlite3_exec(db, create_books_sql, 0, 0, &err_msg) != SQLITE_OK ||
-        sqlite3_exec(db, create_log_sql, 0, 0, &err_msg) != SQLITE_OK) {
+    if ((sqlite3_exec(db, create_books_sql, 0, 0, &err_msg) != SQLITE_OK)
+            || (sqlite3_exec(db, create_log_sql, 0, 0, &err_msg) != SQLITE_OK))
+    {
         fprintf(stderr,"テーブル作成エラー：%s\n", err_msg);
         sqlite3_free(err_msg);
         sqlite3_close(db);
         exit(1);
     }
     return db;
-
 }
-void register_book_to_db(book_t book, sqlite3 *db){
-    const char *sql = "INSERT INTO books (title, author, pages, publish_date, progress, progress_str) VALUES (?, ?, ?, ?, ?, ?);";
-    sqlite3_stmt *stmt;
 
+
+/* 本情報をテーブルに登録する関数 */
+void register_book_to_db(book_t book, sqlite3 *db){
+
+    /* FIXME : この処理を書くべき場所は明らかにここではない */
+    /* 著者情報のシリアライズ */
     char *author_str = (char*)malloc(sizeof(char)*256);
     author_str[0] = '\0';
     if(author_str == NULL){
         fprintf(stderr,"malloc err");
     }
+
     for(int i=0;i < book.number_of_author; i++){
         author_str = strcat(author_str, book.authors[i]);
         if(i != book.number_of_author-1){
             author_str = strcat(author_str,", ");
         }
     }
-    sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    sqlite3_bind_text(stmt, 1, book.title, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, author_str, -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt,  3, book.page);
+
+    /* 本の追加用SQL */
+    const char *register_book_sql = "INSERT INTO books (title, author, pages,\
+                                     publish_date, progress, progress_str)\
+                                     VALUES (?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt *stmt;
+    /* 値のセット */
+    sqlite3_prepare_v2(db, register_book_sql, -1, &stmt, NULL);
+    sqlite3_bind_text(stmt, 1, book.title,        -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, author_str,        -1, SQLITE_STATIC);
+    sqlite3_bind_int (stmt, 3, book.page);
     sqlite3_bind_text(stmt, 4, book.publish_date, -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt,  5, 0);
-    sqlite3_bind_text(stmt, 6, "", -1, SQLITE_STATIC);
+    sqlite3_bind_int (stmt, 5, 0);
+    sqlite3_bind_text(stmt, 6, "",                -1, SQLITE_STATIC);
 
     if (sqlite3_step(stmt) == SQLITE_DONE) {
         printf("本を登録しました。\n");
@@ -192,67 +214,4 @@ void update_progress_to_db(sqlite3 *db, int id ,char *new_progress){
         sqlite3_finalize(stmt);
     }
 
-    //int new_progress = current_progress + read_today;
-
-
-    // if (new_progress > total_pages) new_progress = total_pages;
-
-    // const char *update_sql = "UPDATE books SET progress = ? WHERE id = ?;";
-    // sqlite3_prepare_v2(db, update_sql, -1, &stmt, NULL);
-    // sqlite3_bind_int(stmt, 1, new_progress);
-    // sqlite3_bind_int(stmt, 2, id);
-    // sqlite3_step(stmt);
-    // sqlite3_finalize(stmt);
-
-    // sqlite3_stmt *stmt;
-
-    // const char *select_sql = "SELECT pages, progress FROM books WHERE id = ?;";
-    // if (sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL) != SQLITE_OK) {
-    //     fprintf(stderr, "SQL準備失敗: %s\n", sqlite3_errmsg(db));
-    //     return;
-    // }
-    // sqlite3_bind_int(stmt, 1, id); // id をバインド
-
-
-    //本が全部で何ページか取得  すでに読まれている区間を取得
-
-
-
-    //     printf("今日読んだページを入力\n：例）1ページと50ページのみ読んだ場合 1,50\n");
-    //     printf("例）1ページから50ページの区間を読んだ場合 1-100\n");
-    //     if(fgets(read_today, 4096, stdin) == NULL){
-    //         return ;
-    //     }
-    //     int index = 0;
-    //     int next = 0;
-    //     int start = 0;
-    //     int end = 0;
-    //     while(index < 4096 && read_today[index] != '\0'){
-    //         next = index;
-    //         while(next <4096 && read_today[next] != '\0'){
-    //             if(read_today[next]==',' || read_today[next] == '\0'){
-    //                 read_today[next]='\0';
-    //                 end = atoi(read_today[index]);
-    //                 break;
-    //             }
-    //             if(read_today[next]=='-'){
-    //                 read_today[next]='\0';
-    //                 start = atoi(read_today[index]);
-    //                 break;
-    //             }
-    //             next++;
-    //         }
-    //         if(start == 0){
-    //             start = end;
-    //         }
-    //         if(end != 0){
-    //             printf("start:%d,\n end:%d\n",start,end);
-    //             set_node(start, end, head);
-    //             start = 0;
-    //             end = 0;                
-    //         }
-    //         index = next+1;
-            
-    //     }
-    // }
 }
